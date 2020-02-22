@@ -1,0 +1,174 @@
+print("to chalie shuru karte hai...23rd Feb 2020 : 00:28 PM")
+
+import numpy as np
+import matplotlib.pyplot as plt
+import os
+import cv2
+from tqdm import tqdm
+
+
+
+DATADIR = r"C:\Users\RAJ\Desktop\coloredClassificationPractice\Dataset"
+
+
+CATEGORIES = ["Green", "Red"]
+
+IMG_SIZE1 = 74
+IMG_SIZE2 = 74
+
+
+training_data = []
+
+def create_training_data():
+    for category in CATEGORIES:  #Green and Red 
+
+        path = os.path.join(DATADIR,category)   #create path to Green and Red
+        class_num = CATEGORIES.index(category)  #which Class: 0=Green 1=Red
+
+        for img in tqdm(os.listdir(path)):
+                img_array = cv2.imread(os.path.join(path,img))
+                new_array = cv2.resize(img_array, (IMG_SIZE1, IMG_SIZE2))
+                training_data.append([new_array, class_num])
+                
+                 
+                 
+                 
+create_training_data()
+print(len(training_data))
+
+import random
+random.shuffle(training_data)
+
+for sample in training_data[:10]: #Slicing the List elements from Begining to 10th element
+    print(sample[1]) #sample is containing [Matrix, Class] and we want to print the class only so, sample[1]
+    
+
+
+X = []
+y = []
+
+for features,label in training_data:
+    X.append(features)
+    y.append(label)
+
+X = np.array(X).reshape(-1, IMG_SIZE1, IMG_SIZE2, 3)
+y = np.asarray(y)
+
+
+
+import pickle
+
+pickle_out = open("X.pickle",'wb')
+pickle.dump(X, pickle_out)
+pickle_out.close()
+
+pickle_out_oneMore = open("y.pickle",'wb')
+pickle.dump(y, pickle_out_oneMore)
+pickle_out_oneMore.close()
+
+
+
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import Dense, Dropout, Activation, Flatten
+from tensorflow.keras.layers import Conv2D, MaxPooling2D
+from tensorflow.keras.callbacks import TensorBoard
+import pickle
+import time
+import numpy as np
+
+X = (pickle.load(open("X.pickle", "rb"))) 
+
+y = (pickle.load(open("y.pickle", "rb")))
+
+#pickle_in = open("X.pickle","rb")
+#X = pickle.load(pickle_in)
+
+#pickle_in = open("y.pickle","rb")
+#y = pickle.load(pickle_in)
+
+X = X/255.0
+
+dense_layers = [0]
+layer_sizes = [64]
+conv_layers = [3]
+
+for dense_layer in dense_layers:
+    for layer_size in layer_sizes:
+        for conv_layer in conv_layers:
+            NAME = "{}-conv-{}-nodes-{}-dense-{}".format(conv_layer, layer_size, dense_layer, int(time.time()))
+            print(NAME)
+
+            model = Sequential()
+
+            model.add(Conv2D(layer_size, (3, 3), input_shape=X.shape[1:]))
+            model.add(Activation('relu'))
+            model.add(MaxPooling2D(pool_size=(2, 2)))
+
+            for l in range(conv_layer-1):
+                model.add(Conv2D(layer_size, (3, 3)))
+                model.add(Activation('relu'))
+                model.add(MaxPooling2D(pool_size=(2, 2)))
+
+            model.add(Flatten())
+
+            for _ in range(dense_layer): # _ or l?
+                model.add(Dense(layer_size))
+                model.add(Activation('relu'))
+
+            model.add(Dense(1))
+            model.add(Activation('sigmoid'))
+
+            tensorboard = TensorBoard(log_dir="logs\{}".format(NAME))
+
+            model.compile(loss='binary_crossentropy',
+                          optimizer='adam',
+                          metrics=['accuracy'],
+                          )
+
+            model.fit(X, y,
+                      batch_size=8,
+                      epochs=3,
+                      validation_split=0.1,
+                      callbacks=[tensorboard])
+
+model.save('greenRed.model')
+
+
+import cv2
+import tensorflow as tf
+import numpy as np
+import matplotlib.pyplot as plt
+
+CATEGORIES = ["Green", "Red"]  # will use this to convert prediction num to string value
+model = tf.keras.models.load_model('greenRed.model')
+    
+def prepare(filepath):
+    IMG_SIZE1 = 74
+    IMG_SIZE2 = 74
+    img_array = cv2.imread(filepath)  # read in the image
+    new_array = cv2.resize(img_array, (IMG_SIZE1, IMG_SIZE2))  # resize image to match model's expected sizing
+    
+    plt.subplot(1,2,1)
+    plt.title("Test Picture")
+    plt.imshow(img_array)
+    plt.subplot(1,2,2)
+    plt.title("Test Picture(Resized)")
+    plt.imshow(new_array)
+    
+    new_array = new_array.reshape(-1, IMG_SIZE1, IMG_SIZE2, 3)  # return the image with shaping that TF wants.
+    return new_array/1 #Anyhow - Somehow: Divding it by a number is causing the data type to modify and suit the argument that is required in "model.predict"
+
+imgPath = r"C:\Users\RAJ\Desktop\coloredClassificationPractice\testImages\lightRed.png"
+prediction = model.predict([prepare(imgPath)])
+print ("Predicted Probability:", prediction, " ")
+probability = float(prediction[0][0])
+if probability < 0.5 :
+    binaryPrediction = 0
+else :
+    binaryPrediction = 1
+    
+print ("Binary Probability:",binaryPrediction)
+print("Final Prediction: \n\n→", CATEGORIES[binaryPrediction], " ")
+
+
+
